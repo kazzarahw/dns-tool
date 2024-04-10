@@ -9,6 +9,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"slices"
 	"sync"
 	"time"
@@ -26,10 +27,6 @@ type Handler struct {
 
 // New Handler
 func NewHandler(domain, nameserver string) *Handler {
-	// Assert FQDN
-	if !dns.IsFqdn(domain) {
-		domain = dns.Fqdn(domain)
-	}
 	// Client
 	client := &dns.Client{}
 	client.Timeout = 5 * time.Second
@@ -114,20 +111,48 @@ func (h *Handler) ZoneTransfer() error {
 	return nil
 }
 
+// Help
+func help() {
+	fmt.Println("DNS-Tool")
+	fmt.Println("by: Kazzarah")
+	fmt.Println("")
+	fmt.Println("Usage: ./dns-tool -d <domain> -ns <nameserver>")
+	fmt.Println("")
+	fmt.Println("Example: ./dns-tool -d zonetransfer.me -ns 8.8.8.8:53")
+	fmt.Println("")
+}
+
 // Main
 func main() {
 	// Parse variables from CLI flags
 	domainPtr := flag.String("d", "", "Domain to query")
 	nameserverPtr := flag.String("ns", "8.8.8.8:53", "Nameserver to use")
+	helpPtr := flag.Bool("h", false, "Help")
 	flag.Parse()
 
 	// Unpack variables
 	domain := *domainPtr
 	nameserver := *nameserverPtr
 
+	// Help
+	if *helpPtr || domain == "" {
+		help()
+		return
+	}
+
+	// Assume nameserver port if not specified
+	_, _, err := net.SplitHostPort(nameserver)
+	if err != nil {
+		nameserver = nameserver + ":53"
+	}
+
+	// Assert FQDN
+	if !dns.IsFqdn(domain) {
+		domain = dns.Fqdn(domain)
+	}
+
 	// Print variables
 	fmt.Printf("Domain: %s\n", domain)
-	fmt.Printf("FQDN: %s\n", dns.Fqdn(domain))
 	fmt.Printf("Nameserver: %s\n", nameserver)
 	fmt.Println("")
 
@@ -135,7 +160,7 @@ func main() {
 	handler := NewHandler(domain, nameserver)
 
 	// Run
-	err := handler.ZoneTransfer()
+	err = handler.ZoneTransfer()
 	if err != nil {
 		handler.QueryAll()
 	}
