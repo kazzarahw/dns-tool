@@ -118,7 +118,7 @@ func help() {
 	fmt.Println("")
 	fmt.Println("Usage: ./dns-tool -d <domain> -ns <nameserver>")
 	fmt.Println("")
-	fmt.Println("Example: ./dns-tool -d zonetransfer.me -ns 8.8.8.8:53")
+	fmt.Println("Example: ./dns-tool -d zonetransfer.me -ns nsztm2.digi.ninja:53")
 	fmt.Println("")
 }
 
