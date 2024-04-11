@@ -10,8 +10,10 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"slices"
 	"sync"
+	"text/tabwriter"
 	"time"
 
 	"github.com/miekg/dns"
@@ -45,33 +47,27 @@ func NewHandler(domain, nameserver string) *Handler {
 }
 
 // Query DNS
-func (h *Handler) Query(dnsType uint16) {
+func (h *Handler) Query(dnsType uint16) []dns.RR {
 	// Create message
 	msg := dns.Msg{}
 	msg.SetQuestion(h.Domain, dnsType)
 	// Query
 	resp, _, err := h.Client.Exchange(&msg, h.Nameserver)
 	if err != nil {
-		// fmt.Printf("%s\n", err)
-		h.Query(dnsType)
-		return
+		return h.Query(dnsType)
 	}
-	// Print results
-	for _, answer := range resp.Answer {
-		fmt.Printf("%s\n", answer)
-	}
+	// Return
+	return resp.Answer
 }
 
 // Query All
-func (h *Handler) QueryAll() {
+func (h *Handler) QueryAll() []dns.RR {
 	// DNS Type Blacklist
 	blacklist := []uint16{
-		// dns.TypeNone,
 		dns.TypeANY,
 		dns.TypeAXFR,
-		// dns.TypeIXFR,
-		// dns.TypeReserved,
 	}
+	resp := []dns.RR{}
 	// Query all
 	wg := new(sync.WaitGroup)
 	for dnsType := range dns.TypeToString {
@@ -79,36 +75,34 @@ func (h *Handler) QueryAll() {
 			wg.Add(1)
 			go func(dnsType uint16) {
 				defer wg.Done()
-				h.Query(dnsType)
+				resp = append(resp, h.Query(dnsType)...)
 			}(dnsType)
 		}
 	}
 	// Wait
 	wg.Wait()
-	fmt.Println("")
+	return resp
 }
 
 // AXFR
-func (h *Handler) ZoneTransfer() error {
+func (h *Handler) ZoneTransfer() ([]dns.RR, error) {
 	// Create message
 	msg := dns.Msg{}
 	msg.SetAxfr(h.Domain)
 	// Query
 	env, err := h.Transfer.In(&msg, h.Nameserver)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	resp := []dns.RR{}
 	// Print results
 	for answer := range env {
 		if answer.Error != nil {
-			return answer.Error
+			return nil, answer.Error
 		}
-		for _, rr := range answer.RR {
-			fmt.Printf("%s\n", rr)
-		}
+		resp = append(resp, answer.RR...)
 	}
-	fmt.Println("")
-	return nil
+	return resp, nil
 }
 
 // Help
@@ -120,6 +114,15 @@ func help() {
 	fmt.Println("")
 	fmt.Println("Example: ./dns-tool -d zonetransfer.me -ns nsztm2.digi.ninja:53")
 	fmt.Println("")
+}
+
+// Pretty Print
+func prettyPrint(rr []dns.RR) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+	for _, r := range rr {
+		fmt.Fprintf(w, "%s\n", r)
+	}
+	w.Flush()
 }
 
 // Main
@@ -151,17 +154,20 @@ func main() {
 		domain = dns.Fqdn(domain)
 	}
 
-	// Print variables
-	fmt.Printf("Domain: %s\n", domain)
-	fmt.Printf("Nameserver: %s\n", nameserver)
-	fmt.Println("")
+	// // Print variables
+	// fmt.Printf("Domain: %s\n", domain)
+	// fmt.Printf("Nameserver: %s\n", nameserver)
+	// fmt.Println("")
 
 	// New Handler
 	handler := NewHandler(domain, nameserver)
 
 	// Run
-	err = handler.ZoneTransfer()
+	resp, err := handler.ZoneTransfer()
 	if err != nil {
-		handler.QueryAll()
+		resp = handler.QueryAll()
 	}
+
+	// Print
+	prettyPrint(resp)
 }
