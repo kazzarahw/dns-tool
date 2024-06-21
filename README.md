@@ -1,6 +1,9 @@
 # DNS-Tool
 
-Very basic DNS querying tool because most others are either outdated as shit or essentially completely broken lol.
+Very basic DNS querying tool.
+
+Left for dead and replaced with [dnsx](https://docs.projectdiscovery.io/tools/dnsx/overview)
+
 
 ---
 
